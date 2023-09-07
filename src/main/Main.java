@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package main;
 
 import edu.cmu.lti.jawjaw.pobj.POS;
@@ -13,6 +8,10 @@ import edu.cmu.lti.ws4j.Relatedness;
 import edu.cmu.lti.ws4j.RelatednessCalculator;
 import edu.cmu.lti.ws4j.impl.WuPalmer;
 import edu.cmu.lti.ws4j.util.WS4JConfiguration;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -22,10 +21,14 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Hashtable;
 import java.util.List;
+import opennlp.tools.postag.POSModel;
+import opennlp.tools.postag.POSSample;
+import opennlp.tools.postag.POSTaggerME;
+import opennlp.tools.tokenize.WhitespaceTokenizer;
 
 /**
  *
- * @author ep702413
+ * @author mekdi
  */
 public class Main extends javax.swing.JFrame {
     Hashtable<Integer, String> Hibreqal = new Hashtable<Integer, String>();
@@ -35,8 +38,6 @@ public class Main extends javax.swing.JFrame {
     List<String> Candidatelists= new ArrayList<String>();
     private static ILexicalDatabase db = new NictWordNet();
     String candidatesOfwords="";
-     int j=0;
-     
     static List<String> arrlists= new ArrayList<String>();
     static List<String> affixRemoved= new ArrayList<String>();
     static List<String> meaningOfAllNouns= new ArrayList<String>();
@@ -88,11 +89,8 @@ public class Main extends javax.swing.JFrame {
         jButton1.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                   jTextArea2.setText("Processing ...");
-                    jButton1ActionPerformed(evt);
-                      
-               
-               
-                
+                   jTextArea2.update(jTextArea2.getGraphics());
+                    jButton1ActionPerformed(evt);  
             }
         });
 
@@ -189,31 +187,27 @@ public class Main extends javax.swing.JFrame {
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
+    //Action triggeded when button is clicked
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
-             Sem = ""; Werk = ""; candidatesOfwords = ""; HibreKal="";
-      
-             jTextArea3.setText("");
-             String readText=jTextArea1.getText();
-             readText=readText.replaceAll("[\r\n]+", " "); //Split to read
-             
-             getHibreKal(readText);
-             jTextArea3.setText(candidatesOfwords);
-             getMeaningOfAll(readText);
-            
-             calculateRelatedness();
-            System.out.print(Sem);
-            
+            Sem = ""; Werk = ""; candidatesOfwords = ""; HibreKal="";
+            String readText=jTextArea1.getText();
+            readText=readText.replaceAll("[\r\n]+", " "); //Split to read
+            getHibreKal(readText);
+            getMeaningOfAll(readText);
             jTextArea2.setText("");
             jTextArea2.append(HibreKal);
+            jTextArea2.update(jTextArea2.getGraphics());
+            calculateRelatedness();
             jTextArea2.append("=================================\n");   
             jTextArea2.append("\n"+Sem+"\n"+Werk+"\n");
             jTextArea2.append("=================================\n");
-             
             if(hiberKalMeaning.size()==0){
                 jTextArea2.setText("ህብረ ቃል አልተገኘም");
-                 }
+            }
       
     }//GEN-LAST:event_jButton1ActionPerformed
+    
+    //Connection to the database
     public static ResultSet sqlConnection(String query) {
         String sDriverName = "org.sqlite.JDBC";
         try {
@@ -221,7 +215,7 @@ public class Main extends javax.swing.JFrame {
             } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
            }
-        String sTempDb = "/home/mekdi/Desktop/nlp.sqlite";
+        String sTempDb = "/home/mekdi/NLP Project/Database/nlp.sqlite";
         String sJdbc = "jdbc:sqlite";
         String sDbUrl = sJdbc + ":" + sTempDb;
         int iTimeout = 30;
@@ -247,157 +241,29 @@ public class Main extends javax.swing.JFrame {
       }
     }
     
-    public static String getVerbs (String verbMeaning){
-        if (verbMeaning.isEmpty() != true) {
-            String getVerb = "SELECT * from verbs where amharic = '" + verbMeaning + "'";
-            ResultSet rsVerb = sqlConnection(getVerb);
-            // System.out.println(rsNoun.getFetchSize()); // to check the file meaninig is exist or not
-
-            String english = "";
-
-            try {
-                if (rsVerb.next() == true) {
-                    do {
-                        english = rsVerb.getString("english");
-                        return english;
-                    } while (rsVerb.next());
-
-                } else if (rsVerb.next() == false) {
-
-                    String prefixRemovedWord = removePrefix(verbMeaning);
-                    String suffixRemoved = removeSuffix(prefixRemovedWord);
-                    if(suffixRemoved!=verbMeaning) {
-                        String s = getVerbs(suffixRemoved);
-                        return s;
-                    }
-                }
-
-
-            }catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-
-            return english;
-        }    else {
-            //System.out.println("Empty Set");
-        }
-        return "";
-    }
-    public static String getNouns (String nounMeaning){
-        if (nounMeaning.isEmpty() != true) {
-            String getNoun = "SELECT * from nouns where amharic = '" + nounMeaning + "'";
-            ResultSet rsNoun = sqlConnection(getNoun);
-            String english = "";
-
-            try {
-                if (rsNoun.next() == true) {
-                    do {
-                        english = rsNoun.getString("english");
-                       // System.out.println(english);
-                        return english;
-                    } while (rsNoun.next());
-
-                }
-                else if (rsNoun.next() == false) {
-                    String prefixRemovedWord = removePrefix(nounMeaning);
-                    String suffixRemoved = removeSuffix(prefixRemovedWord);
-                    if(suffixRemoved!=nounMeaning) {
-                        String s = getNouns(suffixRemoved);
-                        return s;
-                    }
-                }
-
-
-            }catch (SQLException e) {
-                throw new RuntimeException(e);
-            }
-
-            return english;
-        }    else {
-            //System.out.println("Empty Set");
-        }
-        return "";
-    }
-    
-    public static  String removePrefix(String word) {
-        String[] prefixes = {"ስለ", "ወደ", "ከ", "በ", "ለ", "የ", "እንደ", "እስከ", "ማ"};
-        String wordSplitted = word;
-        if(wordSplitted.startsWith("ያ")){
-            String[] annomaly = wordSplitted.split("ያ");
-            wordSplitted = "አ"+annomaly[1];
-            return wordSplitted;
-        }
-        for (int i = 0; i < prefixes.length; i++) {
-            if (wordSplitted.startsWith(prefixes[i]) == true) {
-
-                String[] split = word.split(prefixes[i]);
-                wordSplitted = split[1];
-            }
-        }
-        return wordSplitted;
-
-    }
-
-    public static  String removeSuffix(String word){
-        String[] suffixes = {"ን", "ም", "ስ", "ሳ", "ማ", "ና", "ህ"};
-        String wordSplited = word;
-
-        for (int i = 0;i < suffixes.length;i++) {
-            if (wordSplited.endsWith(suffixes[i]) == true) {
-                String[] split = wordSplited.split(suffixes[i]);
-                wordSplited = split[0];
-                if(wordSplited.endsWith("ቱ")){
-                    String [] split2 =wordSplited.split("ቱ");
-                    wordSplited = split2[0]+"ት";
-                }
-                System.out.println(wordSplited);
-            }
-
-        }
-        return wordSplited;
-    }
-
-
-
-    
-//    public void SetHibreKal (String candidate) {
-//        candidatesOfwords +=candidate+"\n";
-//        String query = "SELECT * from homonyms where first = '" + candidate + "'";
-//        ResultSet rs = sqlConnection(query);
-//        try {
-//            while (rs.next()) {
-//                 Hibreqal.put(j, "||| ህብረ ቃል    " + candidate +"                  ");
-////                 Sem[j]="||| ሰሙ         "+  getNouns(rs.getString("second"));
-////                 Werq[j]="||| ወርቁ        "+ getVerbs(rs.getString("third"));
-//                 j++;                              
-//            }
-//        } catch (SQLException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-    
-    
+         //Get the hibrekal from the user qene
      public  void getHibreKal(String statement){
-         hiberKalMeaning.clear();
+        hiberKalMeaning.clear();
         String [] listOfWords = statement.split(" ");
         String success = null;
-        for (int i = 0;i<listOfWords.length;i++){
+        for (int i = listOfWords.length-1;i>0;i--){
             success= getDoubleMeaning(listOfWords[i]);
             if(success!=null){
                 break;
             }
         }
         if(success!=null){
-            //System.out.println("success");
+            System.out.println("Successful!");
         }
         else{
             Joining(statement);
         }
     }
-    public  String getDoubleMeaning (String candidate) {
+    // Get the variation of the hibrekal
+    public String getDoubleMeaning (String candidate) {
         candidatesOfwords +=candidate+"\n";
-                     System.out.println(candidatesOfwords);
-         
+        jTextArea3.setText(candidatesOfwords);
+        jTextArea3.update(jTextArea3.getGraphics());
         String query = "SELECT * from homonyms where first = '" + candidate + "'";
         String hiberekalNoun=null;
         String hiberekalVerb=null;
@@ -411,15 +277,15 @@ public class Main extends javax.swing.JFrame {
                 
                 hiberekalVerb = rs.getString("third");
                 String verbMeaning = getVerbs(hiberekalVerb);
+                //Both variation may be verbs so check in the verbs table
                 if(nounMeaning==""){
                     nounMeaning = getVerbs(hiberekalNoun);
-                    System.out.println("n"+nounMeaning);
                     hiberKalMeaning.add(nounMeaning.replaceAll(",", ""));
                 }
                 else{
                     hiberKalMeaning.add(nounMeaning.replaceAll(",", ""));
                 }
-
+                //Both variation may be nouns so check in the nouns table
                 if(verbMeaning==""){
                     verbMeaning = getNouns(hiberekalVerb);
                     hiberKalMeaning.add(verbMeaning.replaceAll(",", ""));
@@ -428,21 +294,121 @@ public class Main extends javax.swing.JFrame {
                     hiberKalMeaning.add(verbMeaning.replaceAll(",", ""));
                 }
                 System.out.println(hiberekalVerb + " => " + verbMeaning.replace(",", ""));
-                HibreKal = "Hibrekal: "+candidate + "\n" + "Meanings: "+ "\n" +  hiberekalNoun + " => "+hiberKalMeaning.get(0) + "\n" +  hiberekalVerb + " => " + hiberKalMeaning.get(1)+"\n";
-       
+                arrlists.add(hiberekalNoun);
+                arrlists.add(hiberKalMeaning.get(0));
+                arrlists.add(hiberekalVerb);
+                arrlists.add(hiberKalMeaning.get(0));
+                HibreKal = "ህብረ ቃል: "+candidate + "\n" + "ትርጉም: "+ "\n" +  hiberekalNoun + " => "+hiberKalMeaning.get(0) + "\n" +  hiberekalVerb + " => " + hiberKalMeaning.get(1)+"\n";
             }
             if(hiberekalVerb==null){
                 String s = getDoubleMeaningFromVerbs(candidate);
-
             }
             } catch (SQLException e) {
             throw new RuntimeException(e);
         }
         return hiberekalVerb;
-
     }
-
     
+    //Get english verb meaning from the database
+    public static String getVerbs (String verbMeaning){
+        if (verbMeaning.isEmpty() != true) {
+            String getVerb = "SELECT * from verbs where amharic = '" + verbMeaning + "'";
+            ResultSet rsVerb = sqlConnection(getVerb);
+            String english = "";
+            try {
+                if (rsVerb.next() == true) {
+                    do {
+                        english = rsVerb.getString("english");
+                        return english;
+                    } while (rsVerb.next());
+                } else if (rsVerb.next() == false) { //If the verb is not found
+                    String prefixRemovedWord = removePrefix(verbMeaning);
+                    String suffixRemoved = removeSuffix(prefixRemovedWord);
+                    if(suffixRemoved!=verbMeaning) {
+                        String s = getVerbs(suffixRemoved);
+                        return s;
+                    }
+                }
+            }catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+            return english;
+        }    else {
+               System.out.println("Empty Set");
+        }
+        return "";
+    }
+    //Get nouns meaning from database
+    public static String getNouns (String nounMeaning){
+        if (nounMeaning.isEmpty() != true) {
+            String getNoun = "SELECT * from nouns where amharic = '" + nounMeaning + "'";
+            ResultSet rsNoun = sqlConnection(getNoun);
+            String english = "";
+            try {
+                if (rsNoun.next() == true) {
+                    do {
+                        english = rsNoun.getString("english");
+                        return english;
+                    } while (rsNoun.next());
+                }
+                else if (rsNoun.next() == false) { //If noun is not found
+                    String prefixRemovedWord = removePrefix(nounMeaning);
+                    String suffixRemoved = removeSuffix(prefixRemovedWord);
+                    if(suffixRemoved!=nounMeaning) {
+                        String s = getNouns(suffixRemoved);
+                        return s;
+                    }
+                }
+            }catch (SQLException e) {
+                throw new RuntimeException(e);
+            }
+            return english;
+            }else {
+                System.out.println("Empty Set");
+            }
+        return "";
+    }
+    
+    //Remove common prefixes
+    public static  String removePrefix(String word) {
+        String[] prefixes = {"ስለ", "ወደ", "ከ", "በ", "ለ", "የ", "እንደ", "እስከ", "ማ"};
+        String wordSplitted = word;
+        if(wordSplitted.startsWith("ያ")){
+            String[] annomaly = wordSplitted.split("ያ");
+            wordSplitted = "አ"+annomaly[1];
+            return wordSplitted;
+        }
+        for (int i = 0; i < prefixes.length; i++) {
+            if (wordSplitted.startsWith(prefixes[i]) == true) {
+                String[] split = word.split(prefixes[i]);
+                wordSplitted = split[1];
+            }
+        }
+        return wordSplitted;
+    }
+    
+    //Remove common suffixes
+    public static  String removeSuffix(String word){
+        String[] suffixes = {"ን", "ም", "ስ", "ሳ", "ማ", "ና", "ህ"};
+        String wordSplited = word;
+        for (int i = 0;i < suffixes.length;i++) {
+            if (wordSplited.endsWith(suffixes[i]) == true) {
+                String[] split = wordSplited.split(suffixes[i]);
+                if(split.length!=0){
+                wordSplited = split[0];
+                if(wordSplited.endsWith("ቱ")){
+                    String [] split2 =wordSplited.split("ቱ");
+                    wordSplited = split2[0]+"ት";
+                    }
+                }
+            }
+        }
+        return wordSplited;
+    }
+    
+
+
+    //Get verbs english translations when both variation of the homonymns are verbs
     public  String getDoubleMeaningFromVerbs(String word){
         if (word.isEmpty() != true) {
             String getCount = "Select count(word) as numb from nlp where word ='" + word + "' ";
@@ -464,7 +430,6 @@ public class Main extends javax.swing.JFrame {
                         } catch (SQLException e) {
                             throw new RuntimeException(e);
                         }
-
                     }
                 } while (rs.next());
             }
@@ -472,69 +437,91 @@ public class Main extends javax.swing.JFrame {
                 throw new RuntimeException(e);
             }
 
-
         } else {
             return "";
         }
 
         return "";
     }
-    public  void Joining( String statement) {
+    
+    //Split and join letters to form words to check for double meanings
+    public void Joining( String statement) {
         //Check first
         statement = statement.replaceAll(" ", "");
         String[] data = statement.split("");
-        String s = "";
+        String s = ""; int flag=0;
         int k = data.length;
-        for (int i = k-1; i >= 0; i--) {
-            String st;
+         for (int i = k-1; i > 0; i--) {
             int j = i - 2;
-            int l = i - 3;
-            int m = i - 4;
-            int n = i - 5;
-            if (j < data.length) {
+            String st;
+            if (j < data.length && j!=0 && (i-1)>0) {
                 st = data[i-1] + data[i];// take two words
                 String success = getDoubleMeaning(st);
                 if(success==null){
                     continue;
                 }
-                else
+                else{
+                    flag =1;
                     break;
+                }
             }
-            if (l < data.length) {
+         }
+         if(flag==0)
+         for (int i = k-1; i > 0; i--) {
+             int l = i - 3;
+             String st;
+            if (l < data.length && l!=0 && (i-2)>0) {
                 st = data[i-2] + data[i - 1] + data[i]; // take 3 word
                 String success = getDoubleMeaning(st);
-
                 if(success==null){
                     continue;
                 }
-                else
+                else{
+                    flag =1;
                     break;
+                }
             }
-            if (m < data.length) {
+         }
+         if(flag==0)
+         for (int i = k-1; i > 0; i--) {
+               int m = i - 4;
+               String st;
+            if (m < data.length && m!=0 && (i-3)>0) {
                 st = data[i-3] + data[i -2] + data[i -1] + data[i]; // take 4 words
                 String success = getDoubleMeaning(st);
                 if(success==null){
                     continue;
                 }
-                else
+                else{
+                    flag =1;
                     break;
+                }
             }
-            if (n < data.length) {
+
+        }
+           if(flag==0)
+           for (int i = k-1; i > 0; i--) {
+            String st;
+            int n = i - 5;
+             if (n < data.length && n!=0 && (i-4)>0) {
                 st = data[i-4] + data[i-3] + data[i -2] + data[i -1] + data[i]; // take 5 words
                 String success = getDoubleMeaning(st);
                 if(success==null){
                     continue;
                 }
-                else
+                else{
+                    flag =1;
                     break;
+                }
             }
         }
     }
 
-    
+    //Get the meaning of the rest of the qene
     public static void getMeaningOfAll( String statement){
         String noun, verbVariation;
         String [] listOfWords = statement.split(" ");
+        if(hiberKalMeaning.size()!=0)
         for (int i = 0;i<listOfWords.length;i++){
             noun = getNouns((listOfWords[i])).replaceAll("[^a-zA-Z0-9]","");;
             verbVariation = getGeneralForm((listOfWords[i])).replaceAll("[^a-zA-Z0-9]","");
@@ -546,11 +533,10 @@ public class Main extends javax.swing.JFrame {
             if(verbVariation.contains(hibrekalVerb)==false && verbVariation.contains(hibrekalNoun)==false){
                 affixRemoved.add(getGeneralForm((listOfWords[i])));
             }
-
         }
     }
 
-
+    //Get meaning from the general forms
     public static  String getGeneralForm (String word) {
         if (word.isEmpty() != true) {
             String generalFormat = "Select englishTerm from nlp where word ='" + word + "' ";
@@ -560,15 +546,12 @@ public class Main extends javax.swing.JFrame {
                 if (rs.next() == true) {
                     do {
                         english = rs.getString("englishTerm");
-//                        System.out.println(english);
                         return english;
 
                     } while (rs.next());
                 } else {
                     return "";
                 }
-
-
             } catch (SQLException e) {
                 throw new RuntimeException(e);
             }
@@ -576,32 +559,87 @@ public class Main extends javax.swing.JFrame {
             return "";
         }
     }
+      //To tag the hibrekal with its part of speech
+      public static String getPartOfSpeech(String pharse){
+      InputStream inputStream = null;
+        try {
+            //Loading Parts of speech-maxent model
+            inputStream = new 
+                 FileInputStream("/home/mekdi/NLP Project/Libraries/en-pos-maxent.bin");
+            POSModel model = new POSModel(inputStream);
+            //Instantiating POSTaggerME class
+            POSTaggerME tagger = new POSTaggerME(model);
+            String sentence = pharse;
+            //Tokenizing the sentence using WhitespaceTokenizer class
+            WhitespaceTokenizer whitespaceTokenizer= WhitespaceTokenizer.INSTANCE;
+            String[] tokens = whitespaceTokenizer.tokenize(sentence);
+            //Generating tags
+            String[] tags = tagger.tag(tokens);
+            //Instantiating the POSSample class
+            POSSample sample = new POSSample(tokens, tags);
+            return sample.toString();
+            } catch (FileNotFoundException ex) {
+               System.out.println("Exception: "+ex);
+            } catch (IOException ex) {
+               System.out.println("Exception: "+ex);
+            } finally { 
+                try {
+                    inputStream.close();
+                } catch (IOException ex) {
+                 System.out.println("Exception: "+ex);
+                }
+            }
+        return "";
+        
+    }
     
+      //Calculated word relatedness amoung the hibrekals and the rest of the qene
     public static void calculateRelatedness() {
+        if(hiberKalMeaning.size()!=0){
         String affix = "";
         for(int i = 0; i<affixRemoved.size();i++){
             affix=affixRemoved.get(i).replaceAll("[^a-zA-Z0-9]"," ");
             meaningOfAffixes.add(affix);
         }
-
         HashSet<String> uniqueMeanings = new HashSet<String>(meaningOfAffixes);
         String[] uniMeanings = uniqueMeanings.toArray(new String[uniqueMeanings.size()]);
-
-        String[] uniHibreKalMeanings = hiberKalMeaning.toArray(new String[hiberKalMeaning.size()]);
-        for (int i = 0;i<uniHibreKalMeanings.length;i++){
-            System.out.println(uniHibreKalMeanings[i]);
-        }
-
-        String [] hibrekalOne = uniHibreKalMeanings[0].replaceAll("[^a-zA-Z0-9'']"," ").replaceAll("\\s+", " ").split(" ");
-        String [] hibrekalTwo = uniHibreKalMeanings[1].replaceAll("[^a-zA-Z0-9]"," ").replaceAll("\\s+", " ").split(" ");
-
-        int length= 0;
-        if(hibrekalOne.length<hibrekalTwo.length){
-            length = hibrekalOne.length;
+        String[] uniHibreKalMeanings;
+        if(hiberKalMeaning.size()>2){
+             HashSet<String> uniqueHibreKalMeanings = new HashSet<String>(hiberKalMeaning);
+               uniHibreKalMeanings = uniqueHibreKalMeanings.toArray(new String[uniqueHibreKalMeanings.size()]);
         }
         else{
+            uniHibreKalMeanings = hiberKalMeaning.toArray(new String[hiberKalMeaning.size()]);
+        }
+        
+        if(uniHibreKalMeanings.length>1){
+         String [] hibrekalOne=uniHibreKalMeanings[0].replaceAll("[^a-zA-Z0-9'']"," ").replaceAll("\\s+", " ").split(" ");
+        
+        String [] hibrekalTwo= uniHibreKalMeanings[1].replaceAll("[^a-zA-Z0-9]"," ").replaceAll("\\s+", " ").split(" ");
+        
+        int length= 0;
+        if(hibrekalOne.length!=0 && hibrekalOne.length<hibrekalTwo.length){
+            length = hibrekalOne.length;
+        }
+        else if(hibrekalOne.length!=0 ){
             length = hibrekalTwo.length;
         }
+            //set POS
+            String partOfSpeechOne = getPartOfSpeech(hibrekalOne[0]);
+            POS posCharOne = POS.n;
+            String [] partOfSpeechOneChar = partOfSpeechOne.split("_");
+            if(partOfSpeechOneChar[1].contains("N")){
+                posCharOne = POS.n;
+            }
+            else if(partOfSpeechOneChar[1].contains("V")){
+                 posCharOne = POS.v;
+            }
+            else if(partOfSpeechOneChar[1].contains("J")){
+                 posCharOne = POS.a;
+            }
+            else{
+             posCharOne = POS.v;   
+            }
         double sumOne = 0;
         double sumTwo = 0;
         for(int i=0; i<uniMeanings.length; i++){
@@ -610,14 +648,10 @@ public class Main extends javax.swing.JFrame {
                     String [] eachWordInMeaning = uniMeanings[i].split(" ");
                     for(int k =0; k<eachWordInMeaning.length;k++) {
                         if(eachWordInMeaning[k].length()!=0 && hibrekalOne[j].length()!=0){
-
-
-                            double distance1 = wordSimilarity(eachWordInMeaning[k],POS.n, hibrekalOne[j],POS.n);
-
-                            double distance2 = wordSimilarity(eachWordInMeaning[k],POS.v, hibrekalOne[j],POS.n);
-                            double distance3 = wordSimilarity(eachWordInMeaning[k],POS.a, hibrekalOne[j],POS.n);
-                            double distance4= wordSimilarity(eachWordInMeaning[k],POS.r, hibrekalOne[j],POS.n);
-
+                            double distance1 = wordSimilarity(eachWordInMeaning[k],POS.n, hibrekalOne[j],posCharOne);
+                            double distance2 = wordSimilarity(eachWordInMeaning[k],POS.v, hibrekalOne[j],posCharOne);
+                            double distance3 = wordSimilarity(eachWordInMeaning[k],POS.a, hibrekalOne[j],posCharOne);
+                            double distance4= wordSimilarity(eachWordInMeaning[k],POS.r, hibrekalOne[j],posCharOne);
                             if(distance1>distance2 && distance1>distance3 && distance1>distance4){
                                 sumOne=sumOne+distance1;
                             }
@@ -630,7 +664,6 @@ public class Main extends javax.swing.JFrame {
                                 sumOne = sumOne + distance4;
                             }
                         }
-
                     }
                 }
             }
@@ -661,25 +694,29 @@ public class Main extends javax.swing.JFrame {
                 }
             }
         }
-        System.out.println(sumOne);
-        System.out.println(sumTwo);
+        System.out.println("Weight1: "+sumOne);
+        System.out.println("Weight2: "+sumTwo);
         double aveOne = sumOne/uniMeanings.length;
-
         double aveTwo = sumTwo/uniMeanings.length;
         if(aveOne> aveTwo){
-            Sem ="=> ሰም: "+  uniHibreKalMeanings[0];
-            Werk ="=> ወርቅ : "+ uniHibreKalMeanings[1];
-            System.out.println("Sem:"+ uniHibreKalMeanings[0]);
-            System.out.println("Werk:"+uniHibreKalMeanings[1]);
+             Sem ="=> ሰም: " + arrlists.get(0)+ " ("+uniHibreKalMeanings[0]+")";
+             Werk ="=> ወርቅ: "+arrlists.get(2)+ " ("+ uniHibreKalMeanings[1]+")";
+             System.out.println(Sem ="=> ሰም: " + arrlists.get(0)+ " ("+uniHibreKalMeanings[0]+")");
+             System.out.println(Werk ="=> ወርቅ: "+arrlists.get(2)+ " ("+ uniHibreKalMeanings[1]+")");
+         
         }
         else{
-            Sem ="=> ሰም: "+  uniHibreKalMeanings[1];
-            Werk ="=> ወርቅ: "+ uniHibreKalMeanings[0];
-            System.out.println("Sem:"+ uniHibreKalMeanings[1]);
-            System.out.println("Werk:"+uniHibreKalMeanings[0]);
+            Sem ="=> ሰም: "+ arrlists.get(2)+   " ("+uniHibreKalMeanings[1]+")";
+            Werk ="=> ወርቅ: "+arrlists.get(0)+ " ("+uniHibreKalMeanings[0]+")";
+             System.out.println(Sem ="=> ሰም: " + arrlists.get(2)+ " ("+uniHibreKalMeanings[1]+")");
+             System.out.println(Werk ="=> ወርቅ: "+arrlists.get(0)+ " ("+ uniHibreKalMeanings[0]+")");
         }
+        }
+        }
+        arrlists.clear();
 
     }
+    //Calculate word similarity
     static RelatednessCalculator rc = new WuPalmer(db);
     public static double wordSimilarity(String word1, POS posWord1, String word2, POS posWord2) {
         double maxScore = 0;
@@ -697,42 +734,15 @@ public class Main extends javax.swing.JFrame {
                 }
             }
         } catch (Exception e) {
-//            logger.error("Exception : ", e);
+            System.out.println("Expection: "+e);
         }
         return maxScore;
     }
-
-    
-    
     
     /**
      * @param args the command line arguments
      */
     public static void main(String args[]) {
-        /* Set the Nimbus look and feel */
-        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
-        /* If Nimbus (introduced in Java SE 6) is not available, stay with the default look and feel.
-         * For details see http://download.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html 
-         */
-        try {
-            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
-                if ("Nimbus".equals(info.getName())) {
-                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
-                    break;
-                }
-            }
-        } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(Main.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(Main.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(Main.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(Main.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
-        }
-        //</editor-fold>
-
-        /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
                 new Main().setVisible(true);
@@ -740,7 +750,7 @@ public class Main extends javax.swing.JFrame {
         });
     }
 
-    // Variables declaration - do not modify//GEN-BEGIN:variables
+    // Variables declaration
     private javax.swing.JButton jButton1;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
@@ -754,5 +764,5 @@ public class Main extends javax.swing.JFrame {
     private javax.swing.JTextArea jTextArea1;
     private javax.swing.JTextArea jTextArea2;
     private javax.swing.JTextArea jTextArea3;
-    // End of variables declaration//GEN-END:variables
+    // End of variables declaration
 }
